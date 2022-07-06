@@ -1,0 +1,9 @@
+approvers:
+- bertinatto
+- dobsonj
+- gnufied
+- jsafrane
+- RomanBednar
+- tsmetana
+component: "Storage"
+subcomponent: "Operators"
