@@ -1,0 +1,10 @@
+FROM registry.ci.openshift.org/ocp/builder:rhel-8-golang-1.18-openshift-4.12 AS builder
+WORKDIR /go/src/github.com/openshift/gcp-filestore-csi-driver-operator
+COPY . .
+RUN make
+
+FROM registry.ci.openshift.org/ocp/4.12:base
+COPY --from=builder /go/src/github.com/openshift/gcp-filestore-csi-driver-operator/gcp-filestore-csi-driver-operator /usr/bin/
+ENTRYPOINT ["/usr/bin/gcp-filestore-csi-driver-operator"]
+LABEL io.k8s.display-name="OpenShift GCP Filestore CSI Driver Operator" \
+	io.k8s.description="The GCP Filestore CSI Driver Operator installs and maintains the GCP Filestore CSI Driver on a cluster."

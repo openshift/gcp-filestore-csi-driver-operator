@@ -1,0 +1,10 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: gcp-filestore-csi-driver-controller-pdb
+  namespace: ${NAMESPACE}
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: gcp-filestore-csi-driver-controller
