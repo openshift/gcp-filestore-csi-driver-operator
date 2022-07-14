@@ -75,7 +75,7 @@ func RunOperator(ctx context.Context, controllerConfig *controllercmd.Controller
 		controllerConfig.EventRecorder,
 	).WithLogLevelController().WithManagementStateController(
 		operandName,
-		false,
+		true, // Set this operator as removable
 	).WithCSIConfigObserverController(
 		"GCPFilestoreDriverCSIConfigObserverController",
 		configInformers,
