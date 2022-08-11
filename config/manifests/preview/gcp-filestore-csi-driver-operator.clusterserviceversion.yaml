@@ -242,6 +242,17 @@ spec:
             - watch
             - delete
           - apiGroups:
+            - policy
+            resources:
+            - poddisruptionbudgets
+            verbs:
+            - create
+            - list
+            - get
+            - watch
+            - update
+            - delete
+          - apiGroups:
             - '*'
             resources:
             - events
