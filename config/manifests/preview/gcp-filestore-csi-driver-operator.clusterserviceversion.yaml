@@ -190,6 +190,13 @@ spec:
             - watch
             - update
           - apiGroups:
+            - ''
+            resources:
+            - persistentvolumeclaims/status
+            verbs:
+            - update
+            - patch
+          - apiGroups:
             - storage.k8s.io
             resources:
             - volumeattachments
@@ -232,6 +239,12 @@ spec:
             - watch
             - update
             - delete
+          - apiGroups:
+            - snapshot.storage.k8s.io
+            resources:
+            - volumesnapshotcontents/status
+            verbs:
+            - update
           - apiGroups:
             - apiextensions.k8s.io
             resources:
