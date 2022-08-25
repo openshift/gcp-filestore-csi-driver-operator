@@ -1,5 +1,5 @@
 StorageClass:
-  FromExistingClassName: standard-csi
+  FromExistingClassName: filestore-csi
 SnapshotClass:
   FromName: true
 DriverInfo:
@@ -7,24 +7,13 @@ DriverInfo:
   SupportedFsType:
     xfs: {}
     ext4: {}
-  SupportedMountOption:
-    debug:
-    nouid32:
   SupportedSizeRange:
     Min: 1Gi
     Max: 64Ti
-  TopologyKeys:
-    - topology.gke.io/zone
   Capabilities:
     persistence: true
-    fsGroup: true
-    block: true
     exec: true
-    # The driver does support volume limits, however, we disable
-    # the capability to avoid creating 100+ volumes in a single test.
-    volumeLimits: false
+    RWX: true
     controllerExpansion: true
-    nodeExpansion: true
     snapshotDataSource: true
-    topology: true
     multipods: true

@@ -92,7 +92,9 @@ spec:
             - --csi-address=$(ADDRESS)
             # - --default-fstype=ext4
             - --feature-gates=Topology=true
-            - --extra-create-metadata=true
+            # This is commented out because there is a conflict between supported
+            # values in PVC name and label values in Filestore volumes.
+            # - --extra-create-metadata=true
             - --http-endpoint=localhost:8212
             - --leader-election
             - --leader-election-lease-duration=${LEADER_ELECTION_LEASE_DURATION}
