@@ -20,7 +20,7 @@ metadata:
     "operatorframework.io/arch.arm64": supported
 spec:
   displayName: GCP Filestore CSI Driver Operator
-  description: Operator that installs and configures the CSI driver for Amazon Elastic File System (GCP Filestore).
+  description: Operator that installs and configures the CSI driver for GCP Filestore.
   # TODO: we don't have an icon yet
   # icon:
   #   - base64data: 
