@@ -14,6 +14,7 @@ import (
 	policyv1 "k8s.io/api/policy/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	storagev1 "k8s.io/api/storage/v1"
+	apiextclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -59,6 +60,7 @@ type CSIStaticResourceController struct {
 	operatorNamespace string
 	operatorClient    operatorv1helpers.OperatorClientWithFinalizers
 	kubeClient        kubernetes.Interface
+	apiExtClient      apiextclient.Interface
 	dynamicClient     dynamic.Interface
 	eventRecorder     events.Recorder
 	objs              SyncObjects
@@ -69,6 +71,7 @@ func NewCSIStaticResourceController(
 	operatorNamespace string,
 	operatorClient operatorv1helpers.OperatorClientWithFinalizers,
 	kubeClient kubernetes.Interface,
+	apiExtClient apiextclient.Interface,
 	dynamicClient dynamic.Interface,
 	informers operatorv1helpers.KubeInformersForNamespaces,
 	recorder events.Recorder,
@@ -79,6 +82,7 @@ func NewCSIStaticResourceController(
 		operatorNamespace: operatorNamespace,
 		operatorClient:    operatorClient,
 		kubeClient:        kubeClient,
+		apiExtClient:      apiExtClient,
 		dynamicClient:     dynamicClient,
 		eventRecorder:     recorder,
 		objs:              objs,
@@ -192,9 +196,13 @@ func (c *CSIStaticResourceController) syncManaged(ctx context.Context, opSpec *o
 	if err != nil {
 		errs = append(errs, err)
 	}
-	_, _, err = resourceapply.ApplyVolumeSnapshotClass(ctx, c.dynamicClient, c.eventRecorder, c.objs.VolumeSnapshotClass)
-	if err != nil {
-		errs = append(errs, err)
+	// For VolumeSnapshotClass we also check the presence of the CRD.
+	crdName := "volumesnapshotclasses.snapshot.storage.k8s.io"
+	if _, err = c.apiExtClient.ApiextensionsV1().CustomResourceDefinitions().Get(ctx, crdName, metav1.GetOptions{}); err == nil {
+		_, _, err = resourceapply.ApplyVolumeSnapshotClass(ctx, c.dynamicClient, c.eventRecorder, c.objs.VolumeSnapshotClass)
+		if err != nil {
+			errs = append(errs, err)
+		}
 	}
 	_, _, err = resourceapply.ApplyPodDisruptionBudget(ctx, c.kubeClient.PolicyV1(), c.eventRecorder, c.objs.ControllerPDB)
 	if err != nil {
