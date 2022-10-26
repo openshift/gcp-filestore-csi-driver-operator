@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	apiextclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/client-go/dynamic"
 	kubeclient "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -61,6 +62,12 @@ func RunOperator(ctx context.Context, controllerConfig *controllercmd.Controller
 	// Create GenericOperatorclient. This is used by the library-go controllers created down below
 	gvr := opv1.SchemeGroupVersion.WithResource("clustercsidrivers")
 	operatorClient, dynamicInformers, err := goc.NewClusterScopedOperatorClientWithConfigName(controllerConfig.KubeConfig, gvr, string(opv1.GCPFilestoreCSIDriver))
+	if err != nil {
+		return err
+	}
+
+	// Create apiextension client. This is used to verify is a VolumeSnapshotClass CRD exists.
+	apiExtClient, err := apiextclient.NewForConfig(rest.AddUserAgent(controllerConfig.KubeConfig, operatorName))
 	if err != nil {
 		return err
 	}
@@ -158,6 +165,7 @@ func RunOperator(ctx context.Context, controllerConfig *controllercmd.Controller
 		operatorNamespace,
 		operatorClient,
 		kubeClient,
+		apiExtClient,
 		dynamicClient,
 		kubeInformersForNamespaces,
 		controllerConfig.EventRecorder,
