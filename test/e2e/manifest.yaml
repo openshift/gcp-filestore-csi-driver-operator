@@ -17,3 +17,4 @@ DriverInfo:
     controllerExpansion: true
     snapshotDataSource: true
     multipods: true
+    multiplePVsSameID: true
