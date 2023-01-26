@@ -5,5 +5,5 @@ approvers:
 - jsafrane
 - RomanBednar
 - tsmetana
-component: "Storage"
-subcomponent: "Operators"
+- mpatlasov
+component: "Storage / Operators"
