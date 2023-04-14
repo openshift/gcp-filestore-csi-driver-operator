@@ -1,4 +1,4 @@
 packageName: gcp-filestore-csi-driver-operator
 channels:
 - name: preview
-  currentCSV: gcp-filestore-csi-driver-operator.v4.13.0
+  currentCSV: gcp-filestore-csi-driver-operator.v4.14.0
