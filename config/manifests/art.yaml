@@ -1,5 +1,5 @@
 updates:
-  - file: "preview/gcp-filestore-csi-driver-operator.clusterserviceversion.yaml" # relative to this file
+  - file: "stable/gcp-filestore-csi-driver-operator.clusterserviceversion.yaml" # relative to this file
     update_list:
     # replace metadata.name value
     - search: "gcp-filestore-csi-driver-operator.v{MAJOR}.{MINOR}.0"
