@@ -29,7 +29,7 @@ mkdir -p opm-bundle
 pushd opm-bundle
 cp -r -v ../../config/* .
 
-MANIFEST=manifests/preview/gcp-filestore-csi-driver-operator.clusterserviceversion.yaml
+MANIFEST=manifests/stable/gcp-filestore-csi-driver-operator.clusterserviceversion.yaml
 
 # Replace images in the manifest - error prone, needs to be in sync with image-references.
 sed -i $MANIFEST -e "s~quay.io/openshift/origin-gcp-filestore-csi-driver-operator:latest~$OPERATOR_IMAGE~" -e "s~quay.io/openshift/origin-gcp-filestore-csi-driver:latest~$DRIVER_IMAGE~"
