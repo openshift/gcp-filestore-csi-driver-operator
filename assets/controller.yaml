@@ -52,6 +52,7 @@ spec:
             - --v=${LOG_LEVEL}
             - --nodeid=$(KUBE_NODE_NAME)
             - --controller=true
+            - --extra-labels=kubernetes-io-cluster-${CLUSTER_ID}=owned
           env:
             - name: GOOGLE_APPLICATION_CREDENTIALS
               value: "/etc/cloud-sa/service_account.json"
