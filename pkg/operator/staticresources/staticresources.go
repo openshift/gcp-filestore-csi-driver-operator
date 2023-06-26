@@ -36,12 +36,12 @@ type SyncObjects struct {
 	ControllerServiceAccount *corev1.ServiceAccount
 	ControllerRoleBinding    *rbacv1.ClusterRoleBinding
 
-	ProvisionerRole        *rbacv1.ClusterRole
-	ProvisionerRoleBinding *rbacv1.ClusterRoleBinding
+	ProvisionerRoleBinding                     *rbacv1.ClusterRoleBinding
+	VolumesnapshotReaderProvisionerRoleBinding *rbacv1.ClusterRoleBinding
 
-	ResizerRole            *rbacv1.ClusterRole
-	ResizerRoleBinding     *rbacv1.ClusterRoleBinding
-	SnapshotterRole        *rbacv1.ClusterRole
+	ResizerRoleBinding                   *rbacv1.ClusterRoleBinding
+	StorageclassReaderResizerRoleBinding *rbacv1.ClusterRoleBinding
+
 	SnapshotterRoleBinding *rbacv1.ClusterRoleBinding
 	ControllerPDB          *policyv1.PodDisruptionBudget
 
@@ -50,6 +50,9 @@ type SyncObjects struct {
 	MetricsService        *corev1.Service
 	RBACProxyRole         *rbacv1.ClusterRole
 	RBACProxyRoleBinding  *rbacv1.ClusterRoleBinding
+
+	LeaseLeaderElectionRole        *rbacv1.Role
+	LeaseLeaderElectionRoleBinding *rbacv1.RoleBinding
 }
 
 // CSIStaticResourceController creates, manages and deletes static resources of a CSI driver, such as RBAC rules.
@@ -172,15 +175,11 @@ func (c *CSIStaticResourceController) syncManaged(ctx context.Context, opSpec *o
 	if err != nil {
 		errs = append(errs, err)
 	}
-	_, _, err = resourceapply.ApplyClusterRole(ctx, c.kubeClient.RbacV1(), c.eventRecorder, c.objs.ProvisionerRole)
-	if err != nil {
-		errs = append(errs, err)
-	}
 	_, _, err = resourceapply.ApplyClusterRoleBinding(ctx, c.kubeClient.RbacV1(), c.eventRecorder, c.objs.ProvisionerRoleBinding)
 	if err != nil {
 		errs = append(errs, err)
 	}
-	_, _, err = resourceapply.ApplyClusterRole(ctx, c.kubeClient.RbacV1(), c.eventRecorder, c.objs.ResizerRole)
+	_, _, err = resourceapply.ApplyClusterRoleBinding(ctx, c.kubeClient.RbacV1(), c.eventRecorder, c.objs.VolumesnapshotReaderProvisionerRoleBinding)
 	if err != nil {
 		errs = append(errs, err)
 	}
@@ -188,11 +187,19 @@ func (c *CSIStaticResourceController) syncManaged(ctx context.Context, opSpec *o
 	if err != nil {
 		errs = append(errs, err)
 	}
-	_, _, err = resourceapply.ApplyClusterRole(ctx, c.kubeClient.RbacV1(), c.eventRecorder, c.objs.SnapshotterRole)
+	_, _, err = resourceapply.ApplyClusterRoleBinding(ctx, c.kubeClient.RbacV1(), c.eventRecorder, c.objs.StorageclassReaderResizerRoleBinding)
 	if err != nil {
 		errs = append(errs, err)
 	}
 	_, _, err = resourceapply.ApplyClusterRoleBinding(ctx, c.kubeClient.RbacV1(), c.eventRecorder, c.objs.SnapshotterRoleBinding)
+	if err != nil {
+		errs = append(errs, err)
+	}
+	_, _, err = resourceapply.ApplyRole(ctx, c.kubeClient.RbacV1(), c.eventRecorder, c.objs.LeaseLeaderElectionRole)
+	if err != nil {
+		errs = append(errs, err)
+	}
+	_, _, err = resourceapply.ApplyRoleBinding(ctx, c.kubeClient.RbacV1(), c.eventRecorder, c.objs.LeaseLeaderElectionRoleBinding)
 	if err != nil {
 		errs = append(errs, err)
 	}
@@ -304,14 +311,6 @@ func (c *CSIStaticResourceController) syncDeleting(ctx context.Context, opSpec *
 		}
 	}
 
-	if err := c.kubeClient.RbacV1().ClusterRoles().Delete(ctx, c.objs.ProvisionerRole.Name, metav1.DeleteOptions{}); err != nil {
-		if !apierrors.IsNotFound(err) {
-			errs = append(errs, err)
-		} else {
-			klog.V(4).Infof("ClusterRole %s already removed", c.objs.ProvisionerRole.Name)
-		}
-	}
-
 	if err := c.kubeClient.RbacV1().ClusterRoleBindings().Delete(ctx, c.objs.ProvisionerRoleBinding.Name, metav1.DeleteOptions{}); err != nil {
 		if !apierrors.IsNotFound(err) {
 			errs = append(errs, err)
@@ -320,11 +319,11 @@ func (c *CSIStaticResourceController) syncDeleting(ctx context.Context, opSpec *
 		}
 	}
 
-	if err := c.kubeClient.RbacV1().ClusterRoles().Delete(ctx, c.objs.ResizerRole.Name, metav1.DeleteOptions{}); err != nil {
+	if err := c.kubeClient.RbacV1().ClusterRoleBindings().Delete(ctx, c.objs.VolumesnapshotReaderProvisionerRoleBinding.Name, metav1.DeleteOptions{}); err != nil {
 		if !apierrors.IsNotFound(err) {
 			errs = append(errs, err)
 		} else {
-			klog.V(4).Infof("ClusterRole %s already removed", c.objs.ResizerRole.Name)
+			klog.V(4).Infof("ClusterRoleBinding %s already removed", c.objs.VolumesnapshotReaderProvisionerRoleBinding.Name)
 		}
 	}
 
@@ -336,11 +335,11 @@ func (c *CSIStaticResourceController) syncDeleting(ctx context.Context, opSpec *
 		}
 	}
 
-	if err := c.kubeClient.RbacV1().ClusterRoles().Delete(ctx, c.objs.SnapshotterRole.Name, metav1.DeleteOptions{}); err != nil {
+	if err := c.kubeClient.RbacV1().ClusterRoleBindings().Delete(ctx, c.objs.StorageclassReaderResizerRoleBinding.Name, metav1.DeleteOptions{}); err != nil {
 		if !apierrors.IsNotFound(err) {
 			errs = append(errs, err)
 		} else {
-			klog.V(4).Infof("ClusterRole %s already removed", c.objs.SnapshotterRole.Name)
+			klog.V(4).Infof("ClusterRoleBinding %s already removed", c.objs.StorageclassReaderResizerRoleBinding.Name)
 		}
 	}
 
@@ -357,6 +356,22 @@ func (c *CSIStaticResourceController) syncDeleting(ctx context.Context, opSpec *
 			errs = append(errs, err)
 		} else {
 			klog.V(4).Infof("PodDisruptionBudget %s already removed", c.objs.ControllerPDB.Name)
+		}
+	}
+
+	if err := c.kubeClient.RbacV1().Roles(c.operatorNamespace).Delete(ctx, c.objs.LeaseLeaderElectionRole.Name, metav1.DeleteOptions{}); err != nil {
+		if !apierrors.IsNotFound(err) {
+			errs = append(errs, err)
+		} else {
+			klog.V(4).Infof("Role %s already removed", c.objs.LeaseLeaderElectionRole.Name)
+		}
+	}
+
+	if err := c.kubeClient.RbacV1().RoleBindings(c.operatorNamespace).Delete(ctx, c.objs.LeaseLeaderElectionRoleBinding.Name, metav1.DeleteOptions{}); err != nil {
+		if !apierrors.IsNotFound(err) {
+			errs = append(errs, err)
+		} else {
+			klog.V(4).Infof("RoleBinding %s already removed", c.objs.LeaseLeaderElectionRoleBinding.Name)
 		}
 	}
 
