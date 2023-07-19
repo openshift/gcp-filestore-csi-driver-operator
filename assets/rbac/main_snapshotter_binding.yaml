@@ -8,5 +8,5 @@ subjects:
     namespace: ${NAMESPACE}
 roleRef:
   kind: ClusterRole
-  name: gcp-filestore-external-snapshotter-role
+  name: openshift-csi-main-snapshotter-role
   apiGroup: rbac.authorization.k8s.io
