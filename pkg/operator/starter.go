@@ -34,10 +34,11 @@ import (
 
 const (
 	// Operand and operator run in the same namespace
-	operatorName       = "gcp-filestore-csi-driver-operator"
-	operandName        = "gcp-filestore-csi-driver"
-	secretName         = "gcp-filestore-cloud-credentials"
-	trustedCAConfigMap = "gcp-filestore-csi-driver-trusted-ca-bundle"
+	operatorName          = "gcp-filestore-csi-driver-operator"
+	operandName           = "gcp-filestore-csi-driver"
+	cloudCredSecretName   = "gcp-filestore-cloud-credentials"
+	metricsCertSecretName = "gcp-filestore-csi-driver-controller-metrics-serving-cert"
+	trustedCAConfigMap    = "gcp-filestore-csi-driver-trusted-ca-bundle"
 
 	namespaceReplaceKey = "${NAMESPACE}"
 )
@@ -107,7 +108,12 @@ func RunOperator(ctx context.Context, controllerConfig *controllercmd.Controller
 		),
 		csidrivercontrollerservicecontroller.WithSecretHashAnnotationHook(
 			operatorNamespace,
-			secretName,
+			cloudCredSecretName,
+			secretInformer,
+		),
+		csidrivercontrollerservicecontroller.WithSecretHashAnnotationHook(
+			operatorNamespace,
+			metricsCertSecretName,
 			secretInformer,
 		),
 		csidrivercontrollerservicecontroller.WithReplicasHook(nodeInformer.Lister()),
