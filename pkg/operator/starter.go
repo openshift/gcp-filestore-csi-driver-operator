@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
 	apiextclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/client-go/dynamic"
 	kubeclient "k8s.io/client-go/kubernetes"
@@ -15,6 +17,7 @@ import (
 	opv1 "github.com/openshift/api/operator/v1"
 	configclient "github.com/openshift/client-go/config/clientset/versioned"
 	configinformers "github.com/openshift/client-go/config/informers/externalversions"
+	configlisters "github.com/openshift/client-go/config/listers/config/v1"
 	operatorv1client "github.com/openshift/client-go/operator/clientset/versioned"
 	operatorinformer "github.com/openshift/client-go/operator/informers/externalversions"
 	"github.com/openshift/gcp-filestore-csi-driver-operator/assets"
@@ -23,6 +26,7 @@ import (
 	"github.com/openshift/library-go/pkg/operator/csi/csicontrollerset"
 	"github.com/openshift/library-go/pkg/operator/csi/csidrivercontrollerservicecontroller"
 	"github.com/openshift/library-go/pkg/operator/csi/csidrivernodeservicecontroller"
+	dc "github.com/openshift/library-go/pkg/operator/deploymentcontroller"
 	goc "github.com/openshift/library-go/pkg/operator/genericoperatorclient"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceread"
@@ -41,6 +45,13 @@ const (
 	trustedCAConfigMap    = "gcp-filestore-csi-driver-trusted-ca-bundle"
 
 	namespaceReplaceKey = "${NAMESPACE}"
+
+	// globalInfrastructureName is the default name of the Infrastructure object
+	globalInfrastructureName = "cluster"
+
+	// ocpDefaultLabelFmt is the format string for the default label
+	// added to the OpenShift created GCP resources.
+	ocpDefaultLabelFmt = "kubernetes-io-cluster-%s=owned"
 )
 
 func RunOperator(ctx context.Context, controllerConfig *controllercmd.ControllerContext) error {
@@ -117,6 +128,7 @@ func RunOperator(ctx context.Context, controllerConfig *controllercmd.Controller
 			secretInformer,
 		),
 		csidrivercontrollerservicecontroller.WithReplicasHook(nodeInformer.Lister()),
+		withCustomLabels(infraInformer.Lister()),
 	).WithCSIDriverNodeService(
 		"GCPFilestoreDriverNodeServiceController",
 		replaceNamespaceFunc(operatorNamespace),
@@ -209,5 +221,40 @@ func replaceNamespaceFunc(namespace string) resourceapply.AssetFunc {
 			panic(err)
 		}
 		return bytes.ReplaceAll(content, []byte(namespaceReplaceKey), []byte(namespace)), nil
+	}
+}
+
+// withCustomLabels adds labels from Infrastructure.Status.PlatformStatus.GCP.ResourceLabels to the
+// driver command line as --extra-labels=<key1>=<value1>,<key2>=<value2>,...
+func withCustomLabels(infraLister configlisters.InfrastructureLister) dc.DeploymentHookFunc {
+	return func(spec *opv1.OperatorSpec, deployment *appsv1.Deployment) error {
+		infra, err := infraLister.Get(globalInfrastructureName)
+		if err != nil {
+			return fmt.Errorf("custom labels: failed to fetch global Infrastructure object: %w", err)
+		}
+
+		var labels []string
+		if infra.Status.PlatformStatus != nil &&
+			infra.Status.PlatformStatus.GCP != nil &&
+			infra.Status.PlatformStatus.GCP.ResourceLabels != nil {
+			labels = make([]string, len(infra.Status.PlatformStatus.GCP.ResourceLabels))
+			for i, label := range infra.Status.PlatformStatus.GCP.ResourceLabels {
+				labels[i] = fmt.Sprintf("%s=%s", label.Key, label.Value)
+			}
+		}
+
+		labels = append(labels, fmt.Sprintf(ocpDefaultLabelFmt, infra.Status.InfrastructureName))
+		labelsStr := strings.Join(labels, ",")
+		labelsArg := fmt.Sprintf("--extra-labels=%s", labelsStr)
+		klog.V(1).Infof("withCustomLabels: adding extra-labels arg to driver with value %s", labelsStr)
+
+		for i := range deployment.Spec.Template.Spec.Containers {
+			container := &deployment.Spec.Template.Spec.Containers[i]
+			if container.Name != "csi-driver" {
+				continue
+			}
+			container.Args = append(container.Args, labelsArg)
+		}
+		return nil
 	}
 }

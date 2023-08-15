@@ -3,7 +3,7 @@ module github.com/openshift/gcp-filestore-csi-driver-operator
 go 1.19
 
 require (
-	github.com/openshift/api v0.0.0-20230613151523-ba04973d3ed1
+	github.com/openshift/api v0.0.0-20230804173756-26b8597c4de2
 	github.com/openshift/build-machinery-go v0.0.0-20230306181456-d321ffa04533
 	github.com/openshift/client-go v0.0.0-20230503144108-75015d2347cb
 	github.com/openshift/library-go v0.0.0-20230724150037-c515269de16e
