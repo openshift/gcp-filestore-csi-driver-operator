@@ -150,6 +150,7 @@ spec:
             - --leader-election-renew-deadline=${LEADER_ELECTION_RENEW_DEADLINE}
             - --leader-election-retry-period=${LEADER_ELECTION_RETRY_PERIOD}
             - --v=${LOG_LEVEL}
+            - --timeout=120s
           env:
             - name: ADDRESS
               value: /var/lib/csi/sockets/pluginproxy/csi.sock
@@ -192,6 +193,7 @@ spec:
             - --leader-election-renew-deadline=${LEADER_ELECTION_RENEW_DEADLINE}
             - --leader-election-retry-period=${LEADER_ELECTION_RETRY_PERIOD}
             - --v=${LOG_LEVEL}
+            - --timeout=300s
           env:
           - name: ADDRESS
             value: /var/lib/csi/sockets/pluginproxy/csi.sock
