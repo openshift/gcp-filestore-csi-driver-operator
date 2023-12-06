@@ -46,3 +46,5 @@ cd hack
 ```
 
 At the end it will print a command that creates `Subscription` for the newly created index image.
+
+Please ignore this change.
