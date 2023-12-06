@@ -105,6 +105,7 @@ spec:
             # - --controller-publish-readonly
             # - --controller-publish-readonly
             - --timeout=250s
+            - --retry-interval-max=60s
             - --v=${LOG_LEVEL}
           env:
             - name: ADDRESS
