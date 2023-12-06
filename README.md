@@ -23,7 +23,7 @@ EOF
 make
 
 # Set the environment variables
-export DRIVER_IMAGE=k8s.gcr.io/cloud-provider-gcp/gcp-filestore-csi-driver:v1.2.5
+export DRIVER_IMAGE=quay.io/openshift/origin-gcp-filestore-csi-driver:latest
 export OPERATOR_NAME=gcp-filestore-csi-driver-operator
 export PROVISIONER_IMAGE=quay.io/openshift/origin-csi-external-provisioner:latest
 export RESIZER_IMAGE=quay.io/openshift/origin-csi-external-resizer:latest
