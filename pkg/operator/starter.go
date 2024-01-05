@@ -203,7 +203,7 @@ func RunOperator(ctx context.Context, controllerConfig *controllercmd.Controller
 
 	<-ctx.Done()
 
-	return fmt.Errorf("stopped")
+	return nil
 }
 
 func mustReplaceNamespace(namespace, file string) []byte {
