@@ -152,3 +152,142 @@ func TestWithCustomLabels(t *testing.T) {
 		})
 	}
 }
+
+func TestWithCustomResourceTags(t *testing.T) {
+	infraObj := &v1.Infrastructure{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cluster",
+		},
+		Status: v1.InfrastructureStatus{
+			InfrastructureName: "test-dfgh2",
+			PlatformStatus: &v1.PlatformStatus{
+				GCP: &v1.GCPPlatformStatus{
+					ProjectID: "test",
+					Region:    "test",
+				},
+			},
+		},
+	}
+
+	tmplDeployObj := &appsv1.Deployment{
+		Spec: appsv1.DeploymentSpec{
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "csi-driver",
+							Image: "example.io/example-csi-driver",
+							Args: []string{
+								"--endpoint=$(CSI_ENDPOINT)",
+								"--logtostderr",
+								"--v=2",
+								"--nodeid=2",
+								"--controller=true",
+							},
+							Env: []corev1.EnvVar{
+								{
+									Name:  "GOOGLE_APPLICATION_CREDENTIALS",
+									Value: "/etc/cloud-sa/service_account.json",
+								},
+								{
+									Name:  "CSI_ENDPOINT",
+									Value: "unix:///var/lib/csi/sockets/pluginproxy/csi.sock",
+								},
+								{
+									Name: "KUBE_NODE_NAME",
+									ValueFrom: &corev1.EnvVarSource{
+										FieldRef: &corev1.ObjectFieldSelector{
+											FieldPath: "test",
+										},
+									},
+								},
+							},
+						},
+						{
+							Name:  "test-driver",
+							Image: "example.io/example-test-driver",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	tests := []struct {
+		name          string
+		tags          []v1.GCPResourceTag
+		expArgList    string
+		createInfraCR bool
+		wantErr       bool
+	}{
+		{
+			name:          "user tags not configured",
+			tags:          []v1.GCPResourceTag{},
+			expArgList:    "",
+			createInfraCR: true,
+			wantErr:       false,
+		},
+		{
+			name: "user tags configured",
+			tags: []v1.GCPResourceTag{
+				{
+					ParentID: "openshift",
+					Key:      "key1",
+					Value:    "value1",
+				},
+				{
+					ParentID: "openshift",
+					Key:      "key2",
+					Value:    "value2",
+				},
+				{
+					ParentID: "openshift",
+					Key:      "key3",
+					Value:    "value3",
+				},
+			},
+			expArgList:    "--resource-tags=openshift/key1/value1,openshift/key2/value2,openshift/key3/value3",
+			createInfraCR: true,
+			wantErr:       false,
+		},
+		{
+			name:          "Infrastructure CR does not exist",
+			tags:          []v1.GCPResourceTag{},
+			expArgList:    "",
+			createInfraCR: false,
+			wantErr:       true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			objs := make([]runtime.Object, 0)
+			if test.createInfraCR {
+				infraObj.Status.PlatformStatus.GCP.ResourceTags = test.tags
+				objs = append(objs, infraObj)
+			}
+			configClient := fakeconfig.NewSimpleClientset(objs...)
+			configInformerFactory := configinformers.NewSharedInformerFactory(configClient, 0)
+			if test.createInfraCR {
+				configInformerFactory.Config().V1().Infrastructures().Informer().GetIndexer().Add(infraObj)
+			}
+
+			deployment := tmplDeployObj.DeepCopy()
+			updDeployment := tmplDeployObj.DeepCopy()
+			if test.expArgList != "" {
+				updDeployment.Spec.Template.Spec.Containers[0].Args = append(
+					updDeployment.Spec.Template.Spec.Containers[0].Args,
+					test.expArgList,
+				)
+			}
+
+			err := withCustomResourceTags(configInformerFactory.Config().V1().Infrastructures().Lister())(nil, deployment)
+			if (err != nil) != test.wantErr {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if !equality.Semantic.DeepEqual(deployment, updDeployment) {
+				t.Errorf("unexpected deployment want: %+v got: %+v", updDeployment, deployment)
+			}
+		})
+	}
+}
