@@ -129,6 +129,7 @@ func RunOperator(ctx context.Context, controllerConfig *controllercmd.Controller
 		),
 		csidrivercontrollerservicecontroller.WithReplicasHook(nodeInformer.Lister()),
 		withCustomLabels(infraInformer.Lister()),
+		withCustomResourceTags(infraInformer.Lister()),
 	).WithCSIDriverNodeService(
 		"GCPFilestoreDriverNodeServiceController",
 		replaceNamespaceFunc(operatorNamespace),
@@ -246,7 +247,7 @@ func withCustomLabels(infraLister configlisters.InfrastructureLister) dc.Deploym
 		labels = append(labels, fmt.Sprintf(ocpDefaultLabelFmt, infra.Status.InfrastructureName))
 		labelsStr := strings.Join(labels, ",")
 		labelsArg := fmt.Sprintf("--extra-labels=%s", labelsStr)
-		klog.V(1).Infof("withCustomLabels: adding extra-labels arg to driver with value %s", labelsStr)
+		klog.V(5).Infof("withCustomLabels: adding extra-labels arg to driver with value %s", labelsStr)
 
 		for i := range deployment.Spec.Template.Spec.Containers {
 			container := &deployment.Spec.Template.Spec.Containers[i]
@@ -254,6 +255,45 @@ func withCustomLabels(infraLister configlisters.InfrastructureLister) dc.Deploym
 				continue
 			}
 			container.Args = append(container.Args, labelsArg)
+		}
+		return nil
+	}
+}
+
+// withCustomResourceTags adds resource tags from infrastructure.status.platformStatus.gcp.resourceTags to the
+// driver command line as --resource-tags=<parent_id>/<tagKey_shortname>/<tagValue_shortname>,...
+func withCustomResourceTags(infraLister configlisters.InfrastructureLister) dc.DeploymentHookFunc {
+	return func(spec *opv1.OperatorSpec, deployment *appsv1.Deployment) error {
+		infra, err := infraLister.Get(globalInfrastructureName)
+		if err != nil {
+			return fmt.Errorf("withCustomResourceTags: failed to fetch global Infrastructure object: %w", err)
+		}
+
+		var tags []string
+		if infra.Status.PlatformStatus != nil &&
+			infra.Status.PlatformStatus.GCP != nil &&
+			infra.Status.PlatformStatus.GCP.ResourceTags != nil {
+			tags = make([]string, len(infra.Status.PlatformStatus.GCP.ResourceTags))
+			for i, tag := range infra.Status.PlatformStatus.GCP.ResourceTags {
+				tags[i] = fmt.Sprintf("%s/%s/%s", tag.ParentID, tag.Key, tag.Value)
+			}
+		}
+
+		if len(tags) <= 0 {
+			klog.V(5).Infof("withCustomResourceTags: user tags not configured, no changes made to driver args")
+			return nil
+		}
+
+		tagsStr := strings.Join(tags, ",")
+		tagsArg := fmt.Sprintf("--resource-tags=%s", tagsStr)
+		klog.V(5).Infof("withCustomResourceTags: adding resource-tags arg to driver with value %s", tagsStr)
+
+		for i := range deployment.Spec.Template.Spec.Containers {
+			container := &deployment.Spec.Template.Spec.Containers[i]
+			if container.Name != "csi-driver" {
+				continue
+			}
+			container.Args = append(container.Args, tagsArg)
 		}
 		return nil
 	}
