@@ -8,3 +8,4 @@ spec:
   selector:
     matchLabels:
       app: gcp-filestore-csi-driver-controller
+  unhealthyEvictionPolicy: AlwaysAllow
