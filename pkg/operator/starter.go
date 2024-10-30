@@ -4,6 +4,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/utils/clock"
+	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -18,6 +23,7 @@ import (
 	configclient "github.com/openshift/client-go/config/clientset/versioned"
 	configinformers "github.com/openshift/client-go/config/informers/externalversions"
 	configlisters "github.com/openshift/client-go/config/listers/config/v1"
+	applyopv1 "github.com/openshift/client-go/operator/applyconfigurations/operator/v1"
 	operatorv1client "github.com/openshift/client-go/operator/clientset/versioned"
 	operatorinformer "github.com/openshift/client-go/operator/informers/externalversions"
 	"github.com/openshift/gcp-filestore-csi-driver-operator/assets"
@@ -72,8 +78,15 @@ func RunOperator(ctx context.Context, controllerConfig *controllercmd.Controller
 	infraInformer := configInformers.Config().V1().Infrastructures()
 
 	// Create GenericOperatorclient. This is used by the library-go controllers created down below
-	gvr := opv1.SchemeGroupVersion.WithResource("clustercsidrivers")
-	operatorClient, dynamicInformers, err := goc.NewClusterScopedOperatorClientWithConfigName(controllerConfig.KubeConfig, gvr, string(opv1.GCPFilestoreCSIDriver))
+	operatorClient, dynamicInformers, err := goc.NewClusterScopedOperatorClientWithConfigName(
+		clock.RealClock{},
+		controllerConfig.KubeConfig,
+		opv1.SchemeGroupVersion.WithResource("clustercsidrivers"),
+		opv1.SchemeGroupVersion.WithKind("ClusterCSIDriver"),
+		string(opv1.GCPFilestoreCSIDriver),
+		extractOperatorSpec,
+		extractOperatorStatus,
+	)
 	if err != nil {
 		return err
 	}
@@ -127,7 +140,7 @@ func RunOperator(ctx context.Context, controllerConfig *controllercmd.Controller
 			metricsCertSecretName,
 			secretInformer,
 		),
-		csidrivercontrollerservicecontroller.WithReplicasHook(nodeInformer.Lister()),
+		csidrivercontrollerservicecontroller.WithReplicasHook(configInformers),
 		withCustomLabels(infraInformer.Lister()),
 		withCustomResourceTags(infraInformer.Lister()),
 	).WithCSIDriverNodeService(
@@ -150,6 +163,7 @@ func RunOperator(ctx context.Context, controllerConfig *controllercmd.Controller
 		"credentials.yaml",
 		dynamicClient,
 		operatorInformer,
+		wifCredentialsRequestHook,
 	).WithServiceMonitorController(
 		"GCPFilestoreDriverServiceMonitorController",
 		dynamicClient,
@@ -297,4 +311,93 @@ func withCustomResourceTags(infraLister configlisters.InfrastructureLister) dc.D
 		}
 		return nil
 	}
+}
+
+// wifCredentialsRequestHook is a hook function that updates the CredentialsRequest object with the required values for
+// Workload Identity Federation (WIF) clusters.
+// It sets the providerSpec fields of the CredentialsRequest object with the values from environment variables provided
+// by OLM (Subscription).
+// If any of the required environment variables are missing while at least one is present, it returns an error because
+// cluster with WIF is assumed.
+// If none of the WIF variables are present, it returns nil because cluster without WIF is assumed.
+func wifCredentialsRequestHook(spec *opv1.OperatorSpec, cr *unstructured.Unstructured) error {
+	requiredVars := map[string]string{
+		"POOL_ID":               os.Getenv("POOL_ID"),
+		"PROJECT_NUMBER":        os.Getenv("PROJECT_NUMBER"),
+		"PROVIDER_ID":           os.Getenv("PROVIDER_ID"),
+		"SERVICE_ACCOUNT_EMAIL": os.Getenv("SERVICE_ACCOUNT_EMAIL"),
+	}
+
+	// Check if any of the required WIF variables are present.
+	wifVarPresent := false
+	var missingVars []string
+	for varName, varValue := range requiredVars {
+		// Check for missing variables.
+		if varValue == "" {
+			missingVars = append(missingVars, varName)
+		} else {
+			// Assume that if any of the required variables are present, the cluster configured with WIF.
+			wifVarPresent = true
+		}
+	}
+
+	// If no variables are present, return without modifying CredentialsRequest.
+	if !wifVarPresent {
+		return nil
+	}
+
+	// If one or more variables are missing, we can not continue.
+	if len(missingVars) > 0 {
+		sort.Strings(missingVars)
+		return fmt.Errorf("cluster Workload Identity Federation environment detected, but some required environment variable(s) are missing: %s", strings.Join(missingVars, ", "))
+	}
+
+	audience := fmt.Sprintf("//iam.googleapis.com/projects/%s/locations/global/workloadIdentityPools/%s/providers/%s",
+		requiredVars["PROJECT_NUMBER"], requiredVars["POOL_ID"], requiredVars["PROVIDER_ID"])
+
+	if err := unstructured.SetNestedField(cr.Object, requiredVars["POOL_ID"], "spec", "providerSpec", "poolID"); err != nil {
+		return err
+	}
+	if err := unstructured.SetNestedField(cr.Object, requiredVars["PROVIDER_ID"], "spec", "providerSpec", "providerID"); err != nil {
+		return err
+	}
+	if err := unstructured.SetNestedField(cr.Object, requiredVars["SERVICE_ACCOUNT_EMAIL"], "spec", "providerSpec", "serviceAccountEmail"); err != nil {
+		return err
+	}
+	if err := unstructured.SetNestedField(cr.Object, audience, "spec", "providerSpec", "audience"); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func extractOperatorSpec(obj *unstructured.Unstructured, fieldManager string) (*applyopv1.OperatorSpecApplyConfiguration, error) {
+	castObj := &opv1.ClusterCSIDriver{}
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, castObj); err != nil {
+		return nil, fmt.Errorf("unable to convert to OpenShiftAPIServer: %w", err)
+	}
+	ret, err := applyopv1.ExtractClusterCSIDriver(castObj, fieldManager)
+	if err != nil {
+		return nil, fmt.Errorf("unable to extract fields for %q: %w", fieldManager, err)
+	}
+	if ret.Spec == nil {
+		return nil, nil
+	}
+	return &ret.Spec.OperatorSpecApplyConfiguration, nil
+}
+
+func extractOperatorStatus(obj *unstructured.Unstructured, fieldManager string) (*applyopv1.OperatorStatusApplyConfiguration, error) {
+	castObj := &opv1.ClusterCSIDriver{}
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, castObj); err != nil {
+		return nil, fmt.Errorf("unable to convert to OpenShiftAPIServer: %w", err)
+	}
+	ret, err := applyopv1.ExtractClusterCSIDriverStatus(castObj, fieldManager)
+	if err != nil {
+		return nil, fmt.Errorf("unable to extract fields for %q: %w", fieldManager, err)
+	}
+
+	if ret.Status == nil {
+		return nil, nil
+	}
+	return &ret.Status.OperatorStatusApplyConfiguration, nil
 }
