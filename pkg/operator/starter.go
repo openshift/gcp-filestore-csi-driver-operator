@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -150,6 +153,7 @@ func RunOperator(ctx context.Context, controllerConfig *controllercmd.Controller
 		"credentials.yaml",
 		dynamicClient,
 		operatorInformer,
+		wifCredentialsRequestHook,
 	).WithServiceMonitorController(
 		"GCPFilestoreDriverServiceMonitorController",
 		dynamicClient,
@@ -297,4 +301,62 @@ func withCustomResourceTags(infraLister configlisters.InfrastructureLister) dc.D
 		}
 		return nil
 	}
+}
+
+// wifCredentialsRequestHook is a hook function that updates the CredentialsRequest object with the required values for
+// Workload Identity Federation (WIF) clusters.
+// It sets the providerSpec fields of the CredentialsRequest object with the values from environment variables provided
+// by OLM (Subscription).
+// If any of the required environment variables are missing while at least one is present, it returns an error because
+// cluster with WIF is assumed.
+// If none of the WIF variables are present, it returns nil because cluster without WIF is assumed.
+func wifCredentialsRequestHook(spec *opv1.OperatorSpec, cr *unstructured.Unstructured) error {
+	requiredVars := map[string]string{
+		"POOL_ID":               os.Getenv("POOL_ID"),
+		"PROJECT_NUMBER":        os.Getenv("PROJECT_NUMBER"),
+		"PROVIDER_ID":           os.Getenv("PROVIDER_ID"),
+		"SERVICE_ACCOUNT_EMAIL": os.Getenv("SERVICE_ACCOUNT_EMAIL"),
+	}
+
+	// Check if any of the required WIF variables are present.
+	wifVarPresent := false
+	var missingVars []string
+	for varName, varValue := range requiredVars {
+		// Check for missing variables.
+		if varValue == "" {
+			missingVars = append(missingVars, varName)
+		} else {
+			// Assume that if any of the required variables are present, the cluster configured with WIF.
+			wifVarPresent = true
+		}
+	}
+
+	// If no variables are present, return without modifying CredentialsRequest.
+	if !wifVarPresent {
+		return nil
+	}
+
+	// If one or more variables are missing, we can not continue.
+	if len(missingVars) > 0 {
+		sort.Strings(missingVars)
+		return fmt.Errorf("cluster Workload Identity Federation environment detected, but some required environment variable(s) are missing: %s", strings.Join(missingVars, ", "))
+	}
+
+	audience := fmt.Sprintf("//iam.googleapis.com/projects/%s/locations/global/workloadIdentityPools/%s/providers/%s",
+		requiredVars["PROJECT_NUMBER"], requiredVars["POOL_ID"], requiredVars["PROVIDER_ID"])
+
+	if err := unstructured.SetNestedField(cr.Object, requiredVars["POOL_ID"], "spec", "providerSpec", "poolID"); err != nil {
+		return err
+	}
+	if err := unstructured.SetNestedField(cr.Object, requiredVars["PROVIDER_ID"], "spec", "providerSpec", "providerID"); err != nil {
+		return err
+	}
+	if err := unstructured.SetNestedField(cr.Object, requiredVars["SERVICE_ACCOUNT_EMAIL"], "spec", "providerSpec", "serviceAccountEmail"); err != nil {
+		return err
+	}
+	if err := unstructured.SetNestedField(cr.Object, audience, "spec", "providerSpec", "audience"); err != nil {
+		return err
+	}
+
+	return nil
 }
