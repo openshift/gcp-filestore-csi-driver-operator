@@ -374,7 +374,7 @@ func wifCredentialsRequestHook(spec *opv1.OperatorSpec, cr *unstructured.Unstruc
 func extractOperatorSpec(obj *unstructured.Unstructured, fieldManager string) (*applyopv1.OperatorSpecApplyConfiguration, error) {
 	castObj := &opv1.ClusterCSIDriver{}
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, castObj); err != nil {
-		return nil, fmt.Errorf("unable to convert to OpenShiftAPIServer: %w", err)
+		return nil, fmt.Errorf("unable to convert to ClusterCSIDriver: %w", err)
 	}
 	ret, err := applyopv1.ExtractClusterCSIDriver(castObj, fieldManager)
 	if err != nil {
@@ -389,7 +389,7 @@ func extractOperatorSpec(obj *unstructured.Unstructured, fieldManager string) (*
 func extractOperatorStatus(obj *unstructured.Unstructured, fieldManager string) (*applyopv1.OperatorStatusApplyConfiguration, error) {
 	castObj := &opv1.ClusterCSIDriver{}
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, castObj); err != nil {
-		return nil, fmt.Errorf("unable to convert to OpenShiftAPIServer: %w", err)
+		return nil, fmt.Errorf("unable to convert to ClusterCSIDriver: %w", err)
 	}
 	ret, err := applyopv1.ExtractClusterCSIDriverStatus(castObj, fieldManager)
 	if err != nil {
