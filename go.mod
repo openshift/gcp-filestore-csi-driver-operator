@@ -5,7 +5,7 @@ go 1.22.0
 toolchain go1.22.5
 
 require (
-	github.com/openshift/api v0.0.0-20241104230711-4c27e61e5554
+	github.com/openshift/api v0.0.0-20241121150700-ec9bf3faa1aa
 	github.com/openshift/build-machinery-go v0.0.0-20240613134303-8359781da660
 	github.com/openshift/client-go v0.0.0-20241001162912-da6d55e4611f
 	github.com/openshift/library-go v0.0.0-20241104153602-864cc9d1d646
