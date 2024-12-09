@@ -2,6 +2,9 @@ package operator
 
 import (
 	"fmt"
+	opv1 "github.com/openshift/api/operator/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"strings"
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -287,6 +290,91 @@ func TestWithCustomResourceTags(t *testing.T) {
 			}
 			if !equality.Semantic.DeepEqual(deployment, updDeployment) {
 				t.Errorf("unexpected deployment want: %+v got: %+v", updDeployment, deployment)
+			}
+		})
+	}
+}
+
+func TestWIFCredentialsRequestHook(t *testing.T) {
+	tests := []struct {
+		name           string
+		envVars        map[string]string
+		expectedFields map[string]interface{}
+		wantErr        bool
+		errMsg         string
+	}{
+		{
+			name: "All required variables present",
+			envVars: map[string]string{
+				"PROJECT_NUMBER":        "123456",
+				"POOL_ID":               "my-pool",
+				"PROVIDER_ID":           "my-provider",
+				"SERVICE_ACCOUNT_EMAIL": "sa@example.com",
+			},
+			expectedFields: map[string]interface{}{
+				"spec.providerSpec.poolID":              "my-pool",
+				"spec.providerSpec.providerID":          "my-provider",
+				"spec.providerSpec.serviceAccountEmail": "sa@example.com",
+				"spec.providerSpec.audience":            "//iam.googleapis.com/projects/123456/locations/global/workloadIdentityPools/my-pool/providers/my-provider",
+			},
+			wantErr: false,
+		},
+		{
+			name:    "No variables present",
+			envVars: map[string]string{},
+			wantErr: false,
+		},
+		{
+			name: "Missing some required variables",
+			envVars: map[string]string{
+				"PROJECT_NUMBER": "123456",
+				"POOL_ID":        "my-pool",
+			},
+			wantErr: true,
+			errMsg:  "cluster Workload Identity Federation environment detected, but some required environment variable(s) are missing: PROVIDER_ID, SERVICE_ACCOUNT_EMAIL",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Set environment variables
+			for k, v := range tt.envVars {
+				t.Setenv(k, v)
+			}
+
+			spec := &opv1.OperatorSpec{}
+			cr := &unstructured.Unstructured{
+				Object: make(map[string]interface{}),
+			}
+
+			err := wifCredentialsRequestHook(spec, cr)
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("wifCredentialsRequestHook() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if tt.wantErr {
+				if err.Error() != tt.errMsg {
+					t.Errorf("wifCredentialsRequestHook() error message = %v, want %v", err.Error(), tt.errMsg)
+				}
+				return
+			}
+
+			if !tt.wantErr && len(tt.expectedFields) > 0 {
+				for path, expectedValue := range tt.expectedFields {
+					parts := strings.Split(path, ".")
+					value, exists, err := unstructured.NestedFieldNoCopy(cr.Object, parts...)
+					if err != nil {
+						t.Errorf("Error getting nested field %s: %v", path, err)
+					}
+					if !exists {
+						t.Errorf("Expected field %s does not exist", path)
+					}
+					if value != expectedValue {
+						t.Errorf("Field %s = %v, want %v", path, value, expectedValue)
+					}
+				}
 			}
 		})
 	}
