@@ -52,6 +52,7 @@ spec:
             - --v=${LOG_LEVEL}
             - --nodeid=$(KUBE_NODE_NAME)
             - --controller=true
+            - --feature-nfs-export-options=true
           env:
             - name: GOOGLE_APPLICATION_CREDENTIALS
               value: "/etc/cloud-sa/service_account.json"
