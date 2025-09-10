@@ -36,6 +36,13 @@ export KUBE_RBAC_PROXY_IMAGE=quay.io/openshift/origin-kube-rbac-proxy:latest
 ./gce-filestore-csi-driver-operator start --kubeconfig $KUBECONFIG --namespace openshift-cluster-csi-drivers
 ```
 
+## Bumping OCP version in CSV and OLM metadata
+
+This updates the package versions in `config/manifests/gcp-filestore-csi-driver-operator.package.yaml`, `config/manifests/stable/gcp-filestore-csi-driver-operator.clusterserviceversion.yaml`, `README.md` and `Makefile` to 4.20:
+```
+./hack/update-metadata.sh 4.20
+```
+
 # OLM
 
 To build an bundle and index images, use the `hack/create-bundle` script:
