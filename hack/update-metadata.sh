@@ -82,7 +82,8 @@ yq -i '
 MAKEFILE=Makefile
 echo "Updating Makefile build-image version to ${MAJOR_VERSION}.${MINOR_VERSION}"
 if grep -q "call build-image,gcp-filestore-csi-driver-operator" ${MAKEFILE}; then
-    sed -i '' -E "s|ocp/[0-9]+\.[0-9]+:|ocp/${MAJOR_VERSION}.${MINOR_VERSION}:|g" ${MAKEFILE}
+    sed -i.bak -E "s|ocp/[0-9]+\.[0-9]+:|ocp/${MAJOR_VERSION}.${MINOR_VERSION}:|g" ${MAKEFILE}
+    rm ${MAKEFILE}.bak
 else
     echo "build-image call for gcp-filestore-csi-driver-operator not found in ${MAKEFILE}"
 fi
@@ -90,7 +91,8 @@ fi
 README=README.md
 echo "Updating README.md version references to ${MAJOR_VERSION}.${MINOR_VERSION}"
 if grep -q "registry.ci.openshift.org/ocp/" ${README}; then
-    sed -i '' -E "s|registry\.ci\.openshift\.org/ocp/[0-9]+\.[0-9]+:|registry.ci.openshift.org/ocp/${MAJOR_VERSION}.${MINOR_VERSION}:|g" ${README}
+    sed -i.bak -E "s|registry\.ci\.openshift\.org/ocp/[0-9]+\.[0-9]+:|registry.ci.openshift.org/ocp/${MAJOR_VERSION}.${MINOR_VERSION}:|g" ${README}
+    rm ${README}.bak
 else
     echo "registry.ci.openshift.org/ocp/ references not found in ${README}"
 fi
