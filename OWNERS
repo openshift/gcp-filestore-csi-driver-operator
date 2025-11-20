@@ -5,4 +5,6 @@ approvers:
 - RomanBednar
 - tsmetana
 - mpatlasov
+- rhrmo
+- dfajmon
 component: "Storage / Operators"
