@@ -3,7 +3,7 @@ WORKDIR /go/src/github.com/openshift/gcp-filestore-csi-driver-operator
 COPY . .
 RUN make
 
-FROM registry.ci.openshift.org/ocp/4.22:base-rhel9
+FROM registry.ci.openshift.org/ocp/4.22:base-rhel9-minimal
 COPY --from=builder /go/src/github.com/openshift/gcp-filestore-csi-driver-operator/gcp-filestore-csi-driver-operator /usr/bin/
 ENTRYPOINT ["/usr/bin/gcp-filestore-csi-driver-operator"]
 LABEL io.k8s.display-name="OpenShift GCP Filestore CSI Driver Operator" \
