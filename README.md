@@ -49,7 +49,7 @@ To build an bundle and index images, use the `hack/create-bundle` script:
 
 ```shell
 cd hack
-./create-bundle registry.ci.openshift.org/ocp/4.21:gcp-filestore-csi-driver registry.ci.openshift.org/ocp/4.21:gcp-filestore-csi-driver-operator quay.io/<my_user>/filestore-bundle quay.io/<my_user>/filestore-index
+./create-bundle registry.ci.openshift.org/ocp/4.22:gcp-filestore-csi-driver registry.ci.openshift.org/ocp/4.22:gcp-filestore-csi-driver-operator quay.io/<my_user>/filestore-bundle quay.io/<my_user>/filestore-index
 ```
 
 At the end it will print a command that creates `Subscription` for the newly created index image.
