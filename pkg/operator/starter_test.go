@@ -1,6 +1,7 @@
 package operator
 
 import (
+	"context"
 	"fmt"
 	opv1 "github.com/openshift/api/operator/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -376,6 +377,96 @@ func TestWIFCredentialsRequestHook(t *testing.T) {
 					}
 				}
 			}
+		})
+	}
+}
+
+func TestTLSProfileChangeHandler(t *testing.T) {
+	intermediateProfile := &v1.TLSSecurityProfile{
+		Type: v1.TLSProfileIntermediateType,
+	}
+	modernProfile := &v1.TLSSecurityProfile{
+		Type: v1.TLSProfileModernType,
+	}
+
+	tests := []struct {
+		name       string
+		oldObj     interface{}
+		newObj     interface{}
+		wantCancel bool
+	}{
+		{
+			name: "TLSSecurityProfile changed triggers cancel",
+			oldObj: &v1.APIServer{
+				Spec: v1.APIServerSpec{
+					TLSSecurityProfile: intermediateProfile,
+				},
+			},
+			newObj: &v1.APIServer{
+				Spec: v1.APIServerSpec{
+					TLSSecurityProfile: modernProfile,
+				},
+			},
+			wantCancel: true,
+		},
+		{
+			name: "TLSAdherence changed triggers cancel",
+			oldObj: &v1.APIServer{
+				Spec: v1.APIServerSpec{
+					TLSAdherence: v1.TLSAdherencePolicyLegacyAdheringComponentsOnly,
+				},
+			},
+			newObj: &v1.APIServer{
+				Spec: v1.APIServerSpec{
+					TLSAdherence: v1.TLSAdherencePolicyStrictAllComponents,
+				},
+			},
+			wantCancel: true,
+		},
+		{
+			name: "no change does not trigger cancel",
+			oldObj: &v1.APIServer{
+				Spec: v1.APIServerSpec{
+					TLSSecurityProfile: intermediateProfile,
+					TLSAdherence:       v1.TLSAdherencePolicyLegacyAdheringComponentsOnly,
+				},
+			},
+			newObj: &v1.APIServer{
+				Spec: v1.APIServerSpec{
+					TLSSecurityProfile: intermediateProfile,
+					TLSAdherence:       v1.TLSAdherencePolicyLegacyAdheringComponentsOnly,
+				},
+			},
+			wantCancel: false,
+		},
+		{
+			name:       "wrong type does not panic",
+			oldObj:     "not-an-apiserver",
+			newObj:     "not-an-apiserver",
+			wantCancel: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			cancelled := false
+			testCancel := func() {
+				cancelled = true
+				cancel()
+			}
+
+			handler := newAPIServerTLSChangeHandler(testCancel)
+
+			handler.UpdateFunc(tt.oldObj, tt.newObj)
+
+			if cancelled != tt.wantCancel {
+				t.Errorf("cancel called = %v, want %v", cancelled, tt.wantCancel)
+			}
+
+			_ = ctx
 		})
 	}
 }

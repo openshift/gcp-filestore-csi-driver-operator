@@ -14,11 +14,14 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	apiextclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/client-go/dynamic"
 	kubeclient "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
+	configv1 "github.com/openshift/api/config/v1"
 	opv1 "github.com/openshift/api/operator/v1"
 	configclient "github.com/openshift/client-go/config/clientset/versioned"
 	configinformers "github.com/openshift/client-go/config/informers/externalversions"
@@ -76,6 +79,20 @@ func RunOperator(ctx context.Context, controllerConfig *controllercmd.Controller
 	configClient := configclient.NewForConfigOrDie(rest.AddUserAgent(controllerConfig.KubeConfig, operatorName))
 	configInformers := configinformers.NewSharedInformerFactory(configClient, 20*time.Minute)
 	infraInformer := configInformers.Config().V1().Infrastructures()
+
+	// Set up a cancellable context so we can restart the operator when TLS profile changes.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	// Watch for TLS profile or adherence changes on the APIServer CR and restart the
+	// operator process so it picks up the new configuration. The CSIConfigObserverController
+	// handles re-syncing the CSI driver deployment with new TLS values, but the operator
+	// process itself needs a restart to apply any changes to its own serving configuration.
+	if _, err := configInformers.Config().V1().APIServers().Informer().AddEventHandler(
+		newAPIServerTLSChangeHandler(cancel),
+	); err != nil {
+		return fmt.Errorf("failed to add APIServer TLS profile change handler: %w", err)
+	}
 
 	// Create GenericOperatorclient. This is used by the library-go controllers created down below
 	operatorClient, dynamicInformers, err := goc.NewClusterScopedOperatorClientWithConfigName(
@@ -219,6 +236,28 @@ func RunOperator(ctx context.Context, controllerConfig *controllercmd.Controller
 	<-ctx.Done()
 
 	return nil
+}
+
+func newAPIServerTLSChangeHandler(cancel context.CancelFunc) cache.ResourceEventHandlerFuncs {
+	return cache.ResourceEventHandlerFuncs{
+		UpdateFunc: func(oldObj, newObj interface{}) {
+			oldAPI, ok1 := oldObj.(*configv1.APIServer)
+			newAPI, ok2 := newObj.(*configv1.APIServer)
+			if !ok1 || !ok2 {
+				return
+			}
+			if !equality.Semantic.DeepEqual(oldAPI.Spec.TLSSecurityProfile, newAPI.Spec.TLSSecurityProfile) {
+				klog.Infof("Cluster TLS security profile changed, restarting operator to apply new configuration")
+				cancel()
+				return
+			}
+			if oldAPI.Spec.TLSAdherence != newAPI.Spec.TLSAdherence {
+				klog.Infof("TLS adherence policy changed from %q to %q, restarting operator", oldAPI.Spec.TLSAdherence, newAPI.Spec.TLSAdherence)
+				cancel()
+				return
+			}
+		},
+	}
 }
 
 func mustReplaceNamespace(namespace, file string) []byte {
