@@ -372,6 +372,14 @@ spec:
                 - get
                 - list
                 - watch
+            - apiGroups:
+                - networking.k8s.io
+              resources:
+                - networkpolicies
+              verbs:
+                - create
+                - delete
+                - update
           serviceAccountName: gcp-filestore-csi-driver-operator
       deployments:
         - name: gcp-filestore-csi-driver-operator
