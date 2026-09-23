@@ -421,9 +421,10 @@ spec:
                   openshift.io/required-scc: restricted-v2
                 labels:
                   app: gcp-filestore-csi-driver-operator
-                  openshift.storage.network-policy.dns: allow
-                  openshift.storage.network-policy.api-server: allow
-                  openshift.storage.network-policy.operator-metrics-range: allow
+                  openshift.storage.gcp-filestore.network-policy.deny-all: default
+                  openshift.storage.gcp-filestore.network-policy.dns: allow
+                  openshift.storage.gcp-filestore.network-policy.api-server: allow
+                  openshift.storage.gcp-filestore.network-policy.operator-metrics: allow
               spec:
                 serviceAccountName: gcp-filestore-csi-driver-operator
                 containers:
