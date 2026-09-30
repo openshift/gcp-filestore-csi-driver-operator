@@ -720,7 +720,7 @@ type AzureResourceTag struct {
 }
 
 // AzureCloudEnvironment is the name of the Azure cloud environment
-// +kubebuilder:validation:Enum="";AzurePublicCloud;AzureUSGovernmentCloud;AzureChinaCloud;AzureGermanCloud;AzureStackCloud
+// +kubebuilder:validation:Enum="";AzurePublicCloud;AzureUSGovernmentCloud;AzureChinaCloud;AzureGermanCloud;AzureStackCloud;AzureUSSecCloud
 type AzureCloudEnvironment string
 
 const (
@@ -738,6 +738,9 @@ const (
 
 	// AzureStackCloud is the Azure cloud environment used at the edge and on premises.
 	AzureStackCloud AzureCloudEnvironment = "AzureStackCloud"
+
+	// AzureUSSecCloud is the Azure cloud environment for US Government Secret (IL6) workloads.
+	AzureUSSecCloud AzureCloudEnvironment = "AzureUSSecCloud"
 )
 
 // Start: TOMBSTONE
@@ -830,6 +833,25 @@ type GCPPlatformStatus struct {
 	// +optional
 	// +nullable
 	CloudLoadBalancerConfig *CloudLoadBalancerConfig `json:"cloudLoadBalancerConfig,omitempty"`
+
+	// universeDomain is the GCP universe domain for the cluster, detected from
+	// the installer credentials. Components with their own GCP credentials should
+	// read the universe domain from those credentials, as they are the authoritative
+	// source. This field is provided for components that do not have GCP credentials
+	// and for general observability.
+	//
+	// When omitted, standard public GCP (googleapis.com) is assumed.
+	//
+	// universeDomain is an optional field that, when specified, must be non-empty and at most
+	// 253 characters. It must be a valid DNS subdomain: containing only lowercase alphanumeric
+	// characters, '-' or '.', and starting and ending with an alphanumeric character.
+	//
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:XValidation:rule="!format.dns1123Subdomain().validate(self).hasValue()",message="universeDomain must be a valid DNS subdomain: contain no more than 253 characters, contain only lowercase alphanumeric characters, '-' or '.', and start and end with an alphanumeric character"
+	// +optional
+	// +openshift:enable:FeatureGate=GCPSovereignCloudInstall
+	UniverseDomain string `json:"universeDomain,omitempty"`
 
 	// This field was introduced and removed under tech preview.
 	// serviceEndpoints specifies endpoints that override the default endpoints
@@ -1496,7 +1518,7 @@ type VSpherePlatformTopology struct {
 	ComputeCluster string `json:"computeCluster"`
 
 	// networks is the list of port group network names within this failure domain.
-	// If feature gate VSphereMultiNetworks is enabled, up to 10 network adapters may be defined.
+	// Up to 10 network adapters may be defined.
 	// 10 is the maximum number of virtual network devices which may be attached to a VM as defined by:
 	// https://configmax.esp.vmware.com/guest?vmwareproduct=vSphere&release=vSphere%208.0&categories=1-0
 	// The available networks (port groups) can be listed using
@@ -1504,8 +1526,7 @@ type VSpherePlatformTopology struct {
 	// Networks should be in the form of an absolute path:
 	// /<datacenter>/network/<portgroup>.
 	// +required
-	// +openshift:validation:FeatureGateAwareMaxItems:featureGate="",maxItems=1
-	// +openshift:validation:FeatureGateAwareMaxItems:featureGate=VSphereMultiNetworks,maxItems=10
+	// +kubebuilder:validation:MaxItems=10
 	// +kubebuilder:validation:MinItems=1
 	// +listType=atomic
 	Networks []string `json:"networks"`
@@ -1703,12 +1724,10 @@ type VSpherePlatformNodeNetworking struct {
 type VSpherePlatformSpec struct {
 	// vcenters holds the connection details for services to communicate with vCenter.
 	// Up to 3 vCenters are supported.
-	// Once the cluster has been installed, you are unable to change the current number of defined
-	// vCenters except when 1.) the cluster has been upgraded from a version of OpenShift
-	// where the vsphere platform spec was not present or 2.) in TechPreview you are able to add and
-	// remove vCenters but may not remove all vCenters.  You may make modifications to the existing
-	// vCenters that are defined in the vcenters list in order to match with any added or modified
-	// failure domains.
+	// After installation, you can add or change vCenters, or remove some of them, but you must keep
+	// at least one and may not add and remove vCenters during the same update.  You may make modifications
+	// to the existing vCenters that are defined in the vcenters list in order to match with any added or
+	// modified failure domains.
 	// ---
 	// + If VCenters is not defined use the existing cloud-config configmap defined
 	// + in openshift-config.
@@ -1861,7 +1880,7 @@ type VSpherePlatformStatus struct {
 // override existing defaults of IBM Cloud Services.
 type IBMCloudServiceEndpoint struct {
 	// name is the name of the IBM Cloud service.
-	// Possible values are: CIS, COS, COSConfig, DNSServices, GlobalCatalog, GlobalSearch, GlobalTagging, HyperProtect, IAM, KeyProtect, ResourceController, ResourceManager, or VPC.
+	// Possible values are: CIS, COS, COSConfig, DNSServices, GlobalCatalog, GlobalSearch, GlobalTagging, HyperProtect, IAM, KeyProtect, ResourceController, ResourceManager, VPC, TransitGateway, or PowerVS.
 	// For example, the IBM Cloud Private IAM service could be configured with the
 	// service `name` of `IAM` and `url` of `https://private.iam.cloud.ibm.com`
 	// Whereas the IBM Cloud Private VPC service for US South (Dallas) could be configured
@@ -1893,8 +1912,8 @@ type IBMCloudPlatformSpec struct {
 	// overridden. The CCCMO reads in the IBMCloudPlatformSpec and validates each
 	// endpoint is resolvable. Once validated, the cloud config and IBMCloudPlatformStatus
 	// are updated to reflect the same custom endpoints.
-	// A maximum of 13 service endpoints overrides are supported.
-	// +kubebuilder:validation:MaxItems=13
+	// A maximum of 15 service endpoints overrides are supported.
+	// +kubebuilder:validation:MaxItems=15
 	// +listType=map
 	// +listMapKey=name
 	// +optional
@@ -1927,7 +1946,7 @@ type IBMCloudPlatformStatus struct {
 	// overridden. The CCCMO reads in the IBMCloudPlatformSpec and validates each
 	// endpoint is resolvable. Once validated, the cloud config and IBMCloudPlatformStatus
 	// are updated to reflect the same custom endpoints.
-	// +openshift:validation:FeatureGateAwareMaxItems:featureGate=DyanmicServiceEndpointIBMCloud,maxItems=13
+	// +openshift:validation:FeatureGateAwareMaxItems:featureGate=DyanmicServiceEndpointIBMCloud,maxItems=15
 	// +listType=map
 	// +listMapKey=name
 	// +optional
@@ -1978,7 +1997,7 @@ type PowerVSServiceEndpoint struct {
 	// Power Cloud - https://cloud.ibm.com/apidocs/power-cloud
 	//
 	// +required
-	// +kubebuilder:validation:Enum=CIS;COS;COSConfig;DNSServices;GlobalCatalog;GlobalSearch;GlobalTagging;HyperProtect;IAM;KeyProtect;Power;ResourceController;ResourceManager;VPC
+	// +kubebuilder:validation:Enum=CIS;COS;COSConfig;DNSServices;GlobalCatalog;GlobalSearch;GlobalTagging;HyperProtect;IAM;KeyProtect;Power;ResourceController;ResourceManager;VPC;TransitGateway
 	Name string `json:"name"`
 
 	// url is fully qualified URI with scheme https, that overrides the default generated
