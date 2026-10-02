@@ -3,10 +3,10 @@ module github.com/openshift/gcp-filestore-csi-driver-operator
 go 1.26.0
 
 require (
-	github.com/openshift/api v0.0.0-20260729033540-b9305b7e8c5c
+	github.com/openshift/api v0.0.0-20260805215214-cfb63858e9d7
 	github.com/openshift/build-machinery-go v0.0.0-20250530140348-dc5b2804eeee
-	github.com/openshift/client-go v0.0.0-20260728123811-92b24dd0dd1f
-	github.com/openshift/library-go v0.0.0-20260729082949-ed1b43415e01
+	github.com/openshift/client-go v0.0.0-20260806041845-b74fb348f1e7
+	github.com/openshift/library-go v0.0.0-20261001164550-3a828ca2a7e0
 	github.com/prometheus/client_golang v1.24.1
 	github.com/spf13/cobra v1.10.2
 	k8s.io/api v0.36.3
