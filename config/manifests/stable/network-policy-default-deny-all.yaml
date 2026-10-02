@@ -1,0 +1,11 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gcp-filestore-default-deny-all
+spec:
+  podSelector:
+    matchLabels:
+      openshift.storage.gcp-filestore.network-policy.deny-all: default
+  policyTypes:
+  - Ingress
+  - Egress
