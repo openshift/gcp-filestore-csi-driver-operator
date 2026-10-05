@@ -18,7 +18,12 @@ if [ "$? " -ne "0" ]; then
 	exit 1
 fi
 
-TOOL_NAME=$(basename $TOOL_BIN)
+OPM_BIN=$(which opm 2>/dev/null)
+if [ "$?" -ne "0" ]; then
+	echo "Error: opm is not found in \$PATH" 1>&2
+	exit 1
+fi
+
 DRIVER_IMAGE=$1
 OPERATOR_IMAGE=$2
 BUNDLE_IMAGE=$3
@@ -30,6 +35,16 @@ pushd opm-bundle
 cp -r -v ../../config/* .
 
 MANIFEST=manifests/stable/gcp-filestore-csi-driver-operator.clusterserviceversion.yaml
+# extract the name of the bundle from CSV, such as gcp-filestore-csi-driver-operator.v5.0.0
+BUNDLE_NAME=$(sed -n 's/^[[:space:]]*name:[[:space:]]*\([^[:space:]]*\)[[:space:]]*$/\1/p' $MANIFEST | head -n 1)
+
+# extract the skip range from CSV
+SKIP_RANGE=$(sed -n 's/^[[:space:]]*olm\.skipRange:[[:space:]]*"\(.*\)"[[:space:]]*$/\1/p' $MANIFEST)
+
+if [ -z "$BUNDLE_NAME" ]; then
+	echo "Error: Unable to determine bundle name from $MANIFEST" 1>&2
+	exit 1
+fi
 
 # Replace images in the manifest - error prone, needs to be in sync with image-references.
 sed -i $MANIFEST -e "s~quay.io/openshift/origin-gcp-filestore-csi-driver-operator:latest~$OPERATOR_IMAGE~" -e "s~quay.io/openshift/origin-gcp-filestore-csi-driver:latest~$DRIVER_IMAGE~"
@@ -38,14 +53,39 @@ sed -i $MANIFEST -e "s~quay.io/openshift/origin-gcp-filestore-csi-driver-operato
 $TOOL_BIN build -t $BUNDLE_IMAGE -f bundle.Dockerfile .
 $TOOL_BIN push $BUNDLE_IMAGE
 
-# Build the index image and push it
-opm index add --bundles $BUNDLE_IMAGE --tag $INDEX_IMAGE --container-tool $TOOL_NAME
+# Generate a file-based catalog with the development-only preview channel.
+CATALOG_DIR=catalog
+CATALOG=$CATALOG_DIR/catalog.yaml
+mkdir -p $CATALOG_DIR
+cat > $CATALOG <<EOF
+---
+schema: olm.package
+name: gcp-filestore-csi-driver-operator
+defaultChannel: preview
+---
+schema: olm.channel
+package: gcp-filestore-csi-driver-operator
+name: preview
+entries:
+  - name: $BUNDLE_NAME
+EOF
+
+if [ -n "$SKIP_RANGE" ]; then
+	printf '    skipRange: "%s"\n' "$SKIP_RANGE" >> $CATALOG
+fi
+
+$OPM_BIN render $BUNDLE_IMAGE --output yaml >> $CATALOG
+$OPM_BIN validate $CATALOG_DIR
+$OPM_BIN generate dockerfile $CATALOG_DIR
+
+# Build the catalog image and push it
+$TOOL_BIN build -t $INDEX_IMAGE -f $CATALOG_DIR.Dockerfile .
 $TOOL_BIN push $INDEX_IMAGE
 
 
 echo
 echo --------------------
-echo "Index image created"
+echo "File-based catalog image created"
 echo "Copy following snipped to apply it to your cluster"
 echo
 
