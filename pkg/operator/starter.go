@@ -32,6 +32,7 @@ import (
 	"github.com/openshift/gcp-filestore-csi-driver-operator/assets"
 	"github.com/openshift/library-go/pkg/controller/controllercmd"
 	"github.com/openshift/library-go/pkg/controller/factory"
+	"github.com/openshift/library-go/pkg/operator/configobserver/featuregates"
 	"github.com/openshift/library-go/pkg/operator/csi/csicontrollerset"
 	"github.com/openshift/library-go/pkg/operator/csi/csidrivercontrollerservicecontroller"
 	"github.com/openshift/library-go/pkg/operator/csi/csidrivernodeservicecontroller"
@@ -119,15 +120,32 @@ func RunOperator(ctx context.Context, controllerConfig *controllercmd.Controller
 		return err
 	}
 
+	// Build a FeatureGateAccess so the CSI config observer can honor the
+	// TLSGroupPreferences feature gate when observing TLS group (curve)
+	// preferences. The observer tolerates feature gates not being observed yet
+	// and re-syncs once they are, so we do not block here.
+	missingVersion := "0.0.1-snapshot"
+	version := missingVersion // OLM: no OPERATOR_IMAGE_VERSION; derive from ClusterVersion
+
+	featureGateAccessor := featuregates.NewFeatureGateAccess(
+		version,
+		missingVersion,
+		configInformers.Config().V1().ClusterVersions(),
+		configInformers.Config().V1().FeatureGates(),
+		controllerConfig.EventRecorder,
+	)
+	go featureGateAccessor.Run(ctx)
+
 	csiControllerSet := csicontrollerset.NewCSIControllerSet(
 		operatorClient,
 		controllerConfig.EventRecorder,
 	).WithLogLevelController().WithManagementStateController(
 		operandName,
 		true, // Set this operator as removable
-	).WithCSIConfigObserverController(
+	).WithCSIConfigObserverControllerWithFeatureGates(
 		"GCPFilestoreDriverCSIConfigObserverController",
 		configInformers,
+		featureGateAccessor,
 	).WithCSIDriverControllerService(
 		"GCPFilestoreDriverControllerServiceController",
 		replaceNamespaceFunc(operatorNamespace),
