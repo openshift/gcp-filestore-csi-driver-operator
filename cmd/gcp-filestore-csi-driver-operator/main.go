@@ -52,7 +52,9 @@ func NewOperatorCommand() *cobra.Command {
 			}
 		}
 
-		ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
+		// WriteOperatorTLSConfig can wait up to 60 seconds for the feature gates
+		// to be observed.
+		ctx, cancel := context.WithTimeout(cmd.Context(), 90*time.Second)
 		defer cancel()
 		configPath, err := operator.WriteOperatorTLSConfig(ctx)
 		if err != nil {
